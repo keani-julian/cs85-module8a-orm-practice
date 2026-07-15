@@ -1,58 +1,93 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Module 8A orm_practice — Set up instructions & troubleshooting notes
+ 
+## What you'll need
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+- PHP 8.5+ and [Composer](https://getcomposer.org/)
+- Laravel 13
+- A local MySQL server (Homebrew MySQL or Herd) running on `127.0.0.1:3306`
+- Git
 
-## About Laravel
+## Setup instructions 
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+1. **Clone the repository**
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/keani-julian/cs85-module8a-orm-practice.git
+cd cs85-module8a-orm-practice
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+2. **Install PHP dependencies**
+```bash
+composer install
+```
 
-## Contributing
+3. **Create your environment file**
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+cp .env.example .env
+```
 
-## Code of Conduct
+4. **Generate the application key** (fills in the blank `APP_KEY`)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan key:generate
+```
 
-## Security Vulnerabilities
+5. **Create the database** — connect to MySQL and create `orm_practice_db`:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS orm_practice_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
 
-## License
+6. **Confirm the database settings in `.env`** match your MySQL server:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=orm_practice_db
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+7. **Run the migrations**
+
+```bash
+php artisan migrate
+```
+
+A successful run creates the default tables (`users`, `cache`, `jobs`, `sessions`, etc.) and confirms Laravel is connected to MySQL.
+
+## Troubleshooting — what I actually ran into
+
+My setup is macOS with Homebrew MySQL, so these are the exact problems I hit and how I had to work through them.
+
+1. I couldn't connect as root. 
+
+MySQL was already running, but `php artisan migrate` kept giving me `Access denied for user 'root'@'localhost'`. The assignment assumes a blank root password, but my root account (from an earlier module) had a password I didn't remember.
+
+2. I then had to reset the root password using recovery mode.
+
+I stopped MySQL, restarted it with
+`mysqld_safe --skip-grant-tables` (which lets you in without a password), and connected with `mysql -u root`. Then I tried to blank the password:
+
+```sql
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+```
+
+but the password policy blocked me.
+
+`ALTER USER` failed with `Your password does not satisfy the current policy requirements` — MySQL's `validate_password` component won't allow an empty password. I then had to remove that component first, then set the blank password:
+
+```sql
+UNINSTALL COMPONENT 'file://component_validate_password';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+FLUSH PRIVILEGES;
+```
+
+3. After all the stopping/starting, MySQL still wasn't cleanly working. I got it running again by starting it directly with:
+
+/opt/homebrew/opt/mysql/bin/mysqld_safe &
+
+and after that `php artisan migrate` finally connected and created all the tables.
